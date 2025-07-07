@@ -70,6 +70,87 @@ const createOrder = async (req, res) => {
   }
 };
 
+// @desc    Get user orders
+// @route   GET /api/v1/orders
+// @access  Private
+const getUserOrders = async (req, res) => {
+  try {
+    const orders = await Order.find({ user: req.user._id })
+      .sort({ createdAt: -1 })
+      .populate('items.product', 'name price');
+
+    res.status(200).json({
+      status: 'success',
+      data: { orders }
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch orders'
+    });
+  }
+};
+
+// @desc    Get single order
+// @route   GET /api/v1/orders/:id
+// @access  Private
+const getOrder = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id)
+      .populate('items.product', 'name price');
+
+    if (!order) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Order not found'
+      });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: { order }
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch order'
+    });
+  }
+};
+
+// @desc    Update order status (Admin only)
+// @route   PUT /api/v1/orders/:id/status
+// @access  Private/Admin
+const updateOrderStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    const order = await Order.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+
+    if (!order) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Order not found'
+      });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Order status updated',
+      data: { order }
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to update order status'
+    });
+  }
+};
+
 module.exports = {
   createOrder,
   getUserOrders,

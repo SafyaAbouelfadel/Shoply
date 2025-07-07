@@ -1,44 +1,38 @@
 const User = require('../models/user.model');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 
-// Generate JWT Token
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || '7d',
+// Generate JWT token
+const generateToken = (userId) => {
+  return jwt.sign({ userId }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN || '30d',
   });
 };
 
-// @desc    Register a new user
-// @route   POST /api/v1/auth/register
-// @access  Public
-const register = async (req, res) => {
+// Register user
+exports.register = async (req, res) => {
   try {
     const { firstName, lastName, email, password, role } = req.body;
 
-    // Validation
-    if (!firstName || !lastName || !email || !password) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Please provide all required fields'
-      });
-    }
-
-    // Check if user already exists
+    // Check if user exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
         status: 'error',
-        message: 'User already exists with this email'
+        message: 'User already exists with this email',
       });
     }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     // Create user
     const user = await User.create({
       firstName,
       lastName,
       email,
-      password,
-      role: role || 'user'
+      password: hashedPassword,
+      role: role || 'user',
     });
 
     // Generate token
@@ -52,58 +46,37 @@ const register = async (req, res) => {
       message: 'User registered successfully',
       data: {
         user,
-        token
-      }
+        token,
+      },
     });
   } catch (error) {
-    console.error('Registration error:', error);
     res.status(500).json({
       status: 'error',
-      message: error.message || 'Registration failed'
+      message: error.message,
     });
   }
 };
 
-// @desc    Login user
-// @route   POST /api/v1/auth/login
-// @access  Public
-const login = async (req, res) => {
+// Login user
+exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Validation
-    if (!email || !password) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Please provide email and password'
-      });
-    }
-
-    // Find user and include password
+    // Check if user exists
     const user = await User.findOne({ email }).select('+password');
-    
     if (!user) {
       return res.status(401).json({
         status: 'error',
-        message: 'Invalid credentials'
-      });
-    }
-
-    // Check if user is active
-    if (!user.isActive) {
-      return res.status(401).json({
-        status: 'error',
-        message: 'Account is deactivated'
+        message: 'Invalid email or password',
       });
     }
 
     // Check password
-    const isPasswordValid = await user.comparePassword(password);
-    
+    const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       return res.status(401).json({
         status: 'error',
-        message: 'Invalid credentials'
+        message: 'Invalid email or password',
       });
     }
 
@@ -113,139 +86,95 @@ const login = async (req, res) => {
     // Remove password from response
     user.password = undefined;
 
-    res.status(200).json({
+    res.json({
       status: 'success',
       message: 'Login successful',
       data: {
         user,
-        token
-      }
+        token,
+      },
     });
   } catch (error) {
-    console.error('Login error:', error);
     res.status(500).json({
       status: 'error',
-      message: 'Login failed'
+      message: error.message,
     });
   }
 };
 
-// @desc    Get current user profile
-// @route   GET /api/v1/auth/profile
-// @access  Private
-const getProfile = async (req, res) => {
+// Get user profile
+exports.getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
-    
-    res.status(200).json({
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found',
+      });
+    }
+
+    res.json({
       status: 'success',
       data: {
-        user
-      }
+        user,
+      },
     });
   } catch (error) {
-    console.error('Get profile error:', error);
     res.status(500).json({
       status: 'error',
-      message: 'Failed to fetch profile'
+      message: error.message,
     });
   }
 };
 
-// @desc    Update user profile
-// @route   PUT /api/v1/auth/profile
-// @access  Private
-const updateProfile = async (req, res) => {
+// Update user profile
+exports.updateProfile = async (req, res) => {
   try {
-    const { firstName, lastName } = req.body;
-    
+    const { firstName, lastName, email } = req.body;
+
+    // Check if email is being changed and if it's already taken
+    if (email !== req.user.email) {
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Email already in use',
+        });
+      }
+    }
+
+    // Update user
     const user = await User.findByIdAndUpdate(
-      req.user._id,
+      req.user.userId,
       {
         firstName,
-        lastName
+        lastName,
+        email,
       },
       {
         new: true,
-        runValidators: true
+        runValidators: true,
       }
     );
 
-    res.status(200).json({
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found',
+      });
+    }
+
+    res.json({
       status: 'success',
       message: 'Profile updated successfully',
       data: {
-        user
-      }
+        user,
+      },
     });
   } catch (error) {
-    console.error('Update profile error:', error);
     res.status(500).json({
       status: 'error',
-      message: error.message || 'Profile update failed'
+      message: error.message,
     });
   }
-};
-
-// @desc    Change password
-// @route   PUT /api/v1/auth/change-password
-// @access  Private
-const changePassword = async (req, res) => {
-  try {
-    const { currentPassword, newPassword } = req.body;
-
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Please provide current and new password'
-      });
-    }
-
-    // Get user with password
-    const user = await User.findById(req.user._id).select('+password');
-
-    // Check current password
-    const isCurrentPasswordValid = await user.comparePassword(currentPassword);
-    
-    if (!isCurrentPasswordValid) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Current password is incorrect'
-      });
-    }
-
-    // Update password
-    user.password = newPassword;
-    await user.save();
-
-    res.status(200).json({
-      status: 'success',
-      message: 'Password changed successfully'
-    });
-  } catch (error) {
-    console.error('Change password error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: error.message || 'Password change failed'
-    });
-  }
-};
-
-// @desc    Logout user (client-side token removal)
-// @route   POST /api/v1/auth/logout
-// @access  Private
-const logout = async (req, res) => {
-  res.status(200).json({
-    status: 'success',
-    message: 'Logout successful'
-  });
-};
-
-module.exports = {
-  register,
-  login,
-  getProfile,
-  updateProfile,
-  changePassword,
-  logout
 };
