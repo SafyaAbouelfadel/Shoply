@@ -21,8 +21,8 @@ const protect = async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Get user from token
-    const user = await User.findById(decoded.id);
+    // Get user from token - FIX: use decoded.userId instead of decoded.id
+    const user = await User.findById(decoded.userId);
     if (!user) {
       return res.status(401).json({
         status: 'error',
@@ -30,12 +30,34 @@ const protect = async (req, res, next) => {
       });
     }
 
-    req.user = user;
+    // Set user object with consistent structure
+    req.user = {
+      userId: user._id,
+      _id: user._id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      role: user.role
+    };
+    
     next();
   } catch (error) {
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid token'
+      });
+    }
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Token expired'
+      });
+    }
+    
     return res.status(401).json({
       status: 'error',
-      message: 'Invalid token'
+      message: 'Authentication failed'
     });
   }
 };

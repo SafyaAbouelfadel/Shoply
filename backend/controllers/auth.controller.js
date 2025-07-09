@@ -1,18 +1,38 @@
 const User = require('../models/user.model');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
 
 // Generate JWT token
 const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '30d',
-  });
+  return jwt.sign(
+    { userId }, // Make sure this matches middleware
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+  );
+};
+
+// Format user response
+const formatUserResponse = (user) => {
+  return {
+    id: user._id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+    role: user.role,
+    createdAt: user.createdAt,
+  };
 };
 
 // Register user
 exports.register = async (req, res) => {
   try {
     const { firstName, lastName, email, password, role } = req.body;
+
+    if (!firstName || !lastName || !email || !password) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide first name, last name, email, and password',
+      });
+    }
 
     // Check if user exists
     const existingUser = await User.findOne({ email });
@@ -23,36 +43,27 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
-
     // Create user
-    const user = await User.create({
-      firstName,
-      lastName,
-      email,
-      password: hashedPassword,
-      role: role || 'user',
-    });
+    const userData = { firstName, lastName, email, password };
+    if (role === 'admin') {
+      userData.role = 'admin';
+    }
 
-    // Generate token
+    const user = await User.create(userData);
     const token = generateToken(user._id);
-
-    // Remove password from response
-    user.password = undefined;
 
     res.status(201).json({
       status: 'success',
       message: 'User registered successfully',
       data: {
-        user,
+        user: formatUserResponse(user),
         token,
       },
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(400).json({
       status: 'error',
-      message: error.message,
+      message: error.message || 'Registration failed',
     });
   }
 };
@@ -61,6 +72,13 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide email and password',
+      });
+    }
 
     // Check if user exists
     const user = await User.findOne({ email }).select('+password');
@@ -72,8 +90,8 @@ exports.login = async (req, res) => {
     }
 
     // Check password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
       return res.status(401).json({
         status: 'error',
         message: 'Invalid email or password',
@@ -83,21 +101,18 @@ exports.login = async (req, res) => {
     // Generate token
     const token = generateToken(user._id);
 
-    // Remove password from response
-    user.password = undefined;
-
-    res.json({
+    res.status(200).json({
       status: 'success',
       message: 'Login successful',
       data: {
-        user,
+        user: formatUserResponse(user),
         token,
       },
     });
   } catch (error) {
     res.status(500).json({
       status: 'error',
-      message: error.message,
+      message: 'Login failed',
     });
   }
 };
@@ -113,16 +128,16 @@ exports.getProfile = async (req, res) => {
       });
     }
 
-    res.json({
+    res.status(200).json({
       status: 'success',
       data: {
-        user,
+        user: formatUserResponse(user),
       },
     });
   } catch (error) {
     res.status(500).json({
       status: 'error',
-      message: error.message,
+      message: 'Failed to get profile',
     });
   }
 };
@@ -133,12 +148,15 @@ exports.updateProfile = async (req, res) => {
     const { firstName, lastName, email } = req.body;
 
     // Check if email is being changed and if it's already taken
-    if (email !== req.user.email) {
-      const existingUser = await User.findOne({ email });
+    if (email) {
+      const existingUser = await User.findOne({
+        email,
+        _id: { $ne: req.user.userId },
+      });
       if (existingUser) {
         return res.status(400).json({
           status: 'error',
-          message: 'Email already in use',
+          message: 'Email already taken',
         });
       }
     }
@@ -146,15 +164,8 @@ exports.updateProfile = async (req, res) => {
     // Update user
     const user = await User.findByIdAndUpdate(
       req.user.userId,
-      {
-        firstName,
-        lastName,
-        email,
-      },
-      {
-        new: true,
-        runValidators: true,
-      }
+      { firstName, lastName, email },
+      { new: true, runValidators: true }
     );
 
     if (!user) {
@@ -164,17 +175,82 @@ exports.updateProfile = async (req, res) => {
       });
     }
 
-    res.json({
+    res.status(200).json({
       status: 'success',
       message: 'Profile updated successfully',
       data: {
-        user,
+        user: formatUserResponse(user),
       },
+    });
+  } catch (error) {
+    res.status(400).json({
+      status: 'error',
+      message: error.message || 'Failed to update profile',
+    });
+  }
+};
+
+// Change password
+exports.changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide current password and new password',
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'New password must be at least 6 characters long',
+      });
+    }
+
+    const user = await User.findById(req.user.userId).select('+password');
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found',
+      });
+    }
+
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Current password is incorrect',
+      });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Password changed successfully',
+    });
+  } catch (error) {
+    res.status(400).json({
+      status: 'error',
+      message: error.message || 'Failed to change password',
+    });
+  }
+};
+
+// Logout user
+exports.logout = async (req, res) => {
+  try {
+    res.status(200).json({
+      status: 'success',
+      message: 'Logged out successfully',
     });
   } catch (error) {
     res.status(500).json({
       status: 'error',
-      message: error.message,
+      message: 'Logout failed',
     });
   }
 };
