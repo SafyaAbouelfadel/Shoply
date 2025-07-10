@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const Profile = () => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, updateProfile } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -62,15 +62,25 @@ const Profile = () => {
       return;
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address');
+      setLoading(false);
+      return;
+    }
+
     try {
-      // Note: You'll need to implement updateProfile in your AuthContext
-      // For now, we'll just show a success message
-      setSuccess('Profile updated successfully!');
+      const result = await updateProfile(formData);
       
-      // Simulate API call
-      setTimeout(() => {
-        setSuccess('');
-      }, 3000);
+      if (result.success) {
+        setSuccess('Profile updated successfully!');
+        // Clear success message after 3 seconds
+        setTimeout(() => {
+          setSuccess('');
+        }, 3000);
+      } else {
+        setError(result.error);
+      }
     } catch (error) {
       setError('Failed to update profile. Please try again.');
     } finally {
