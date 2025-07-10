@@ -48,6 +48,8 @@ const createOrder = async (req, res) => {
       });
     }
 
+    console.log('Creating order for user:', req.user?._id); // check if user is attached
+
     // Create order
     const order = await Order.create({
       user: req.user._id,
@@ -63,10 +65,11 @@ const createOrder = async (req, res) => {
       data: { order }
     });
   } catch (error) {
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to create order'
-    });
+  console.error('Order creation error:', error); // 👈 add this line
+  res.status(500).json({
+    status: 'error',
+    message: 'Failed to create order'
+  });
   }
 };
 

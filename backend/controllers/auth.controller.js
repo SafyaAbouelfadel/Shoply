@@ -10,10 +10,11 @@ const generateToken = (userId) => {
   );
 };
 
-// Format user response
+// Format user response with explicit userId alias
 const formatUserResponse = (user) => {
   return {
     id: user._id,
+    userId: user._id, // Explicit alias for clarity
     firstName: user.firstName,
     lastName: user.lastName,
     email: user.email,
