@@ -20,22 +20,67 @@ This platform delivers a fully functional e-commerce experience, featuring:
 Shoply/     
 │   
 ├── backend/    
-│ ├── config/ # Configuration files (e.g., DB, environment)     
-│ ├── controllers/ # Route logic and handlers   
-│ ├── middleware/ # Custom middleware (auth, errors, etc.)       
-│ ├── models/ # Mongoose data models (User, Product, Order)        
-│ ├── routes/ # API route definitions   
-│ ├── test-endpoints/ # Automated endpoint tests    
-│ ├── server.js # App entry point   
-│ ├── package.json # Backend dependencies   
-│ └── .env # Environment variables  
+│   ├── config/                     # Configuration files   
+│   │   ├── db.js   
+│   │   └── stripe.js   
+│   │   
+│   ├── controllers/               # Route logic and handlers   
+│   │   ├── auth.controller.js  
+│   │   ├── order.controller.js     
+│   │   └── product.controller.js   
+│   │   └── user.controller.js     
+│   │   
+│   ├── middleware/                # Custom middleware (auth, etc.)     
+│   │   └── auth.middleware.js  
+│   │   
+│   ├── models/                    # Mongoose data models   
+│   │   ├── order.model.js  
+│   │   ├── product.model.js    
+│   │   └── user.model.js   
+│   │   
+│   ├── routes/                    # API route definitions  
+│   │   └── v1/     
+│   │       ├── auth.routes.js  
+│   │       ├── order.routes.js     
+│   │       └── product.routes.js   
+│   │       └── user.routes.js     
+│   │   
+│   ├── .gitignore                 # Ignored files for Git  
+│   ├── package.json               # Backend dependencies   
+│   └── server.js                  # Backend entry point    
 │   
 ├── frontend/   
-│ ├── public/ # Static files and assets             
-│ ├── src/ # React components and logic     
-│ ├── package.json # Frontend dependencies  
-│ ├── .gitignore # Ignored files for Git    
-│ └── README.md # Project documentation 
+│   ├── src/    
+│   │   ├── context/               # Global state/context   
+│   │   │   ├── AuthContext.js  
+│   │   │   └── CartContext.js  
+│   │   │   
+│   │   ├── pages/                 # Page components    
+│   │   │   ├── Home.js     
+│   │   │   ├── Products.js     
+│   │   │   ├── OrderDetails.js    
+│   │   │   ├── Cart.js        
+│   │   │   ├── Login.js    
+│   │   │   ├── Register.js         
+│   │   │   ├── Profile.js  
+│   │   │   └── Orders.js   
+│   │   │   
+│   │   ├── services/              # API service layer  
+│   │   │   └── api.js      
+│   │   │   
+│   │   ├── App.css     
+│   │   ├── App.js          
+│   │   ├── App.test.js     
+│   │   ├── index.css   
+│   │   ├── index.js    
+│   │   ├── logo.svg    
+│   │   ├── reportWebVitals.js  
+│   │   └── setupTests.js   
+│   │   
+│   ├── .gitignore                 # Ignored frontend files     
+│   ├── package.json               # Frontend dependencies  
+│   ├── package-lock.json          # Exact versions of frontend deps    
+│   └── README.md                  # Frontend documentation 
 
 
 ## Usage Guidelines
